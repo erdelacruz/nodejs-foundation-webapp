@@ -21,52 +21,50 @@ import { useAuth } from '../context/AuthContext';
 // Features: horizontal grid, y/x axis labels, hover highlight + tooltip.
 // Pure SVG + React state — no external charting library.
 // ---------------------------------------------------------------------------
-function VisitTimeline({ visits }) {
+function VisitTimeline({ monthlyStats }) {
   const [hoverIdx, setHoverIdx] = React.useState(null);
   const svgRef = React.useRef(null);
 
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  // ── Bucket visits by calendar month (0 = Jan … 11 = Dec) ───────────────
-  const monthlyCounts = new Array(12).fill(0);
-  visits.forEach(v => {
-    const m = new Date(v.timestamp).getMonth();
-    monthlyCounts[m]++;
-  });
-
-  const maxVal = Math.max(...monthlyCounts, 1);
+  const totalCounts  = monthlyStats.map(m => m.total);
+  const uniqueCounts = monthlyStats.map(m => m.unique);
+  const maxVal       = Math.max(...totalCounts, 1);
 
   // ── SVG layout constants ────────────────────────────────────────────────
-  const W = 480, H = 190;
-  const ML = 36, MR = 20, MT = 18, MB = 44;
+  const W = 480, H = 215;
+  const ML = 36, MR = 20, MT = 18, MB = 62; // extra bottom margin for legend
   const PW = W - ML - MR;
   const PH = H - MT - MB;
-  const BAR_W   = (PW / 12) * 0.55; // bar width = 55% of each slot
-  const SLOT_W  = PW / 12;          // width allocated per month
+  const PAIR_W  = (PW / 12) * 0.27; // width of each bar in a pair
+  const PAIR_GAP = 2.5;             // gap between the two bars in a pair
+  const SLOT_W  = PW / 12;
 
-  // Centre of each bar slot
-  const barX = i => ML + SLOT_W * i + SLOT_W / 2;
-  const yAt  = v => MT + PH * (1 - v / maxVal);
-  const AXIS_Y = MT + PH;           // y-coordinate of the x-axis baseline
+  const slotCenter = i => ML + SLOT_W * i + SLOT_W / 2;
+  const yAt        = v => MT + PH * (1 - v / maxVal);
+  const AXIS_Y     = MT + PH;
 
   // ── Y-axis: 4 evenly spaced grid levels ────────────────────────────────
   const yLevels = [0, 1, 2, 3].map(i => Math.round((i / 3) * maxVal));
 
-  // ── Mouse tracking → nearest bar ───────────────────────────────────────
+  // ── Mouse tracking → nearest slot ──────────────────────────────────────
   const onMouseMove = e => {
     if (!svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
     const mx   = (e.clientX - rect.left) / rect.width * W;
     let near = 0, best = Infinity;
-    monthlyCounts.forEach((_, i) => {
-      const d = Math.abs(barX(i) - mx);
+    totalCounts.forEach((_, i) => {
+      const d = Math.abs(slotCenter(i) - mx);
       if (d < best) { best = d; near = i; }
     });
     setHoverIdx(near);
   };
 
   // Flip tooltip left when near right edge
-  const tooltipX = idx => (barX(idx) > W - 120 ? barX(idx) - 108 : barX(idx) + 10);
+  const tooltipX = idx => (slotCenter(idx) > W - 140 ? slotCenter(idx) - 132 : slotCenter(idx) + 10);
+
+  // Legend row Y position (below x-axis labels)
+  const LEGEND_Y = H - MB + 34;
 
   return (
     <svg
@@ -84,45 +82,69 @@ function VisitTimeline({ visits }) {
         </g>
       ))}
 
-      {/* ── Bars ── */}
-      {monthlyCounts.map((count, i) => {
-        const cx      = barX(i);
-        const barH    = (count / maxVal) * PH;
+      {/* ── Paired bars (total + unique) per month ── */}
+      {MONTHS.map((_, i) => {
+        const cx      = slotCenter(i);
         const isHover = hoverIdx === i;
+
+        const totalH  = (totalCounts[i] / maxVal) * PH;
+        const uniqueH = (uniqueCounts[i] / maxVal) * PH;
+
         return (
-          <rect
-            key={i}
-            x={cx - BAR_W / 2}
-            y={AXIS_Y - barH}
-            width={BAR_W}
-            height={barH || 1}          /* always render at least 1px so empty months are visible */
-            rx="3"
-            fill={isHover ? '#4338ca' : '#4f46e5'}
-            fillOpacity={isHover ? 1 : 0.75}
-          />
+          <g key={i}>
+            {/* Total visits — left bar */}
+            <rect
+              x={cx - PAIR_W - PAIR_GAP / 2}
+              y={AXIS_Y - totalH}
+              width={PAIR_W}
+              height={totalH || 1}
+              rx="2"
+              fill={isHover ? '#4338ca' : '#4f46e5'}
+              fillOpacity={isHover ? 1 : 0.85}
+            />
+            {/* Unique visits — right bar */}
+            <rect
+              x={cx + PAIR_GAP / 2}
+              y={AXIS_Y - uniqueH}
+              width={PAIR_W}
+              height={uniqueH || 1}
+              rx="2"
+              fill={isHover ? '#0891b2' : '#06b6d4'}
+              fillOpacity={isHover ? 1 : 0.80}
+            />
+          </g>
         );
       })}
 
       {/* ── X-axis month labels ── */}
       {MONTHS.map((label, i) => (
-        <text key={i} x={barX(i)} y={H - MB + 18} fontSize="9.5" fill="#94a3b8" textAnchor="middle">
+        <text key={i} x={slotCenter(i)} y={H - MB + 18} fontSize="9.5" fill="#94a3b8" textAnchor="middle">
           {label}
         </text>
       ))}
 
+      {/* ── Legend ── */}
+      <rect x={ML}      y={LEGEND_Y} width={10} height={10} rx="2" fill="#4f46e5" fillOpacity="0.85" />
+      <text x={ML + 14} y={LEGEND_Y + 9} fontSize="10" fill="#64748b">Total Visits</text>
+      <rect x={ML + 95} y={LEGEND_Y} width={10} height={10} rx="2" fill="#06b6d4" fillOpacity="0.80" />
+      <text x={ML + 109} y={LEGEND_Y + 9} fontSize="10" fill="#64748b">Unique Visits</text>
+
       {/* ── Hover tooltip ── */}
-      {hoverIdx !== null && monthlyCounts[hoverIdx] > 0 && (() => {
+      {hoverIdx !== null && (totalCounts[hoverIdx] > 0 || uniqueCounts[hoverIdx] > 0) && (() => {
         const tx     = tooltipX(hoverIdx);
-        const barTop = yAt(monthlyCounts[hoverIdx]);
-        const ty     = (barTop + AXIS_Y) / 2 - 15; // vertically centred on the bar
+        const barTop = yAt(totalCounts[hoverIdx] || 1);
+        const ty     = (barTop + AXIS_Y) / 2 - 22;
         return (
           <>
-            <rect x={tx} y={ty} width={100} height={30} rx="6"
+            <rect x={tx} y={ty} width={122} height={42} rx="6"
               fill="white" stroke="#e2e8f0" strokeWidth="1"
               style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,.10))' }}
             />
-            <text x={tx + 10} y={ty + 20} fontSize="11" fill="#4f46e5" fontWeight="700">
-              {MONTHS[hoverIdx] + ': ' + monthlyCounts[hoverIdx]}
+            <text x={tx + 10} y={ty + 16} fontSize="10.5" fill="#4f46e5" fontWeight="700">
+              {MONTHS[hoverIdx]}: {totalCounts[hoverIdx]} visits
+            </text>
+            <text x={tx + 10} y={ty + 32} fontSize="10.5" fill="#0891b2" fontWeight="700">
+              {uniqueCounts[hoverIdx]} unique
             </text>
           </>
         );
@@ -237,7 +259,7 @@ export default function AdminPage() {
           Four panels: activity timeline + three breakdown bar charts.
           All charts are pure SVG / CSS — no external library required.
       ──────────────────────────────────────────────────────────────────── */}
-      {stats && stats.recentVisits.length > 0 && (
+      {stats && stats.monthlyStats && stats.recentVisits.length > 0 && (
         <div className="charts-section">
           <h2 className="charts-heading">Analytics Overview</h2>
           <div className="charts-grid">
@@ -245,7 +267,7 @@ export default function AdminPage() {
             {/* Visit Activity — smooth dual-line chart over bucketed time slots */}
             <div className="chart-card chart-card--wide">
               <p className="chart-title">Visit Activity</p>
-              <VisitTimeline visits={stats.recentVisits} />
+              <VisitTimeline monthlyStats={stats.monthlyStats} />
             </div>
 
             {/* Browser breakdown */}

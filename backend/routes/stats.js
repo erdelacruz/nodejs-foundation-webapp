@@ -37,6 +37,10 @@ let totalVisits      = 0;
 const uniqueVisitors = new Set(); // Set only stores each value once
 const recentVisits   = [];        // Array of visit objects, capped at 10
 
+// Monthly aggregates — index 0 = Jan … 11 = Dec.
+// Persists across all visits regardless of year (same-month visits accumulate).
+const monthlyData = Array.from({ length: 12 }, () => ({ total: 0, fingerprints: new Set() }));
+
 // ---------------------------------------------------------------------------
 // getClientIp — extracts the real IP address from the request.
 //
@@ -155,6 +159,11 @@ router.post('/visit', async (req, res) => {
   // increments the unique count when the fingerprint has not been seen before.
   uniqueVisitors.add(fingerprint);
 
+  // Track per-month totals and unique visitors
+  const month = new Date().getMonth();
+  monthlyData[month].total++;
+  monthlyData[month].fingerprints.add(fingerprint);
+
   // ── Build and store the visit record ────────────────────────────────────
   const visitRecord = {
     timestamp: new Date().toISOString(), // ISO 8601 format — easy to parse everywhere
@@ -178,7 +187,8 @@ router.get('/visitors', verifyToken, (req, res) => {
   res.json({
     totalVisits,                         // Total page load count
     uniqueVisitors: uniqueVisitors.size, // Number of distinct visitor UUIDs
-    recentVisits,                        // Array of enriched visit objects
+    recentVisits,                        // Array of enriched visit objects (last 10)
+    monthlyStats: monthlyData.map(m => ({ total: m.total, unique: m.fingerprints.size })),
   });
 });
 
