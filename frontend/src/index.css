@@ -1,0 +1,313 @@
+/* ============================================================
+   Global Stylesheet — Node.js Foundation Web App
+   ============================================================ */
+
+/* CSS custom properties (variables) — change these to retheme the whole app */
+:root {
+  --primary:    #4f46e5; /* Indigo — primary action color */
+  --primary-dk: #3730a3; /* Darker indigo for hover states */
+  --danger:     #dc2626; /* Red — destructive actions */
+  --success:    #16a34a; /* Green — positive states */
+  --bg:         #f8fafc; /* Light grey page background */
+  --surface:    #ffffff; /* Card / panel background */
+  --border:     #e2e8f0; /* Subtle border color */
+  --text:       #1e293b; /* Dark slate — primary text */
+  --muted:      #64748b; /* Grey — secondary/helper text */
+  --radius:     8px;     /* Border radius used throughout */
+}
+
+/* Box-sizing: border-box makes width/height include padding and border,
+   which prevents unexpected overflow and simplifies layout math */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, -apple-system, sans-serif; /* Native OS fonts — no web font download */
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* ── Navbar ──────────────────────────────────────────────── */
+.navbar {
+  display: flex;              /* Horizontal layout */
+  align-items: center;        /* Vertically center items */
+  justify-content: space-between; /* Brand left, links right */
+  padding: 0 2rem;
+  height: 60px;
+  background: var(--primary);
+  color: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+
+.nav-brand {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: white;
+  text-decoration: none;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem; /* Space between links */
+}
+
+.nav-links a {
+  color: rgba(255,255,255,.85);
+  text-decoration: none;
+  font-size: .95rem;
+  transition: color .2s;
+}
+
+.nav-links a:hover { color: white; }
+
+/* ── Main content area ───────────────────────────────────── */
+.main-content {
+  max-width: 1000px;
+  margin: 2rem auto;   /* Centered horizontally with vertical breathing room */
+  padding: 0 1.5rem;
+}
+
+/* ── Generic page wrapper ───────────────────────────────── */
+.page { padding: 1rem 0; }
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btn-primary {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: .6rem 1.4rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: .95rem;
+  font-weight: 600;
+  transition: background .2s;
+}
+
+.btn-primary:hover:not(:disabled) { background: var(--primary-dk); }
+.btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+
+.btn-logout {
+  background: rgba(255,255,255,.15);
+  color: white;
+  border: 1px solid rgba(255,255,255,.4);
+  padding: .4rem 1rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: .9rem;
+  transition: background .2s;
+}
+.btn-logout:hover { background: rgba(255,255,255,.25); }
+
+/* ── Public page ─────────────────────────────────────────── */
+.hero {
+  text-align: center;
+  padding: 3rem 1rem 2rem;
+}
+.hero h1 { font-size: 2.4rem; margin-bottom: .75rem; }
+.hero-subtitle { color: var(--muted); font-size: 1.1rem; }
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); /* Responsive columns */
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+.card h2 { margin-bottom: .5rem; color: var(--primary); }
+
+/* ── Login page ──────────────────────────────────────────── */
+.login-page {
+  display: flex;
+  justify-content: center;
+  padding-top: 3rem;
+}
+
+.login-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.08);
+}
+
+.login-box h1 { margin-bottom: .5rem; }
+.login-hint   { color: var(--muted); margin-bottom: 1.5rem; font-size: .9rem; }
+
+.login-form {
+  display: flex;
+  flex-direction: column; /* Stack labels and inputs vertically */
+  gap: 1.2rem;
+}
+
+.login-form label {
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+  font-weight: 600;
+  font-size: .95rem;
+}
+
+.login-form input {
+  padding: .6rem .9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 1rem;
+  outline: none;
+  transition: border-color .2s;
+}
+.login-form input:focus { border-color: var(--primary); }
+
+/* Error banner — red alert box */
+.error-banner {
+  background: #fee2e2;
+  color: var(--danger);
+  border: 1px solid #fca5a5;
+  border-radius: var(--radius);
+  padding: .75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: .9rem;
+}
+
+/* ── Admin page ──────────────────────────────────────────── */
+.admin-header { margin-bottom: 1.5rem; }
+.admin-header h1 { font-size: 2rem; }
+.welcome { color: var(--muted); margin-top: .3rem; }
+
+.refresh-btn { margin-bottom: 2rem; }
+
+/* Three-column grid for KPI stat cards */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+
+/* The 'highlight' class makes the unique visitor card stand out */
+.stat-card.highlight {
+  border-color: var(--primary);
+  background: #eff6ff;
+}
+
+.stat-number {
+  display: block;
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1;
+  margin-bottom: .4rem;
+}
+
+.stat-label {
+  display: block;
+  font-weight: 700;
+  font-size: .85rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+  margin-bottom: .5rem;
+}
+
+.stat-desc { font-size: .85rem; color: var(--muted); }
+
+/* Recent visits list */
+.recent-visits {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.recent-visits h2 { margin-bottom: 1rem; }
+
+.visit-list { list-style: none; }
+
+.visit-item {
+  display: flex;
+  align-items: flex-start; /* top-align so icon stays at the top when meta wraps */
+  gap: .75rem;
+  padding: .75rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: .95rem;
+}
+
+.visit-item:last-child { border-bottom: none; }
+
+.visit-icon {
+  font-size: 1.2rem;
+  margin-top: .1rem; /* visually align icon with the first text line */
+  flex-shrink: 0;    /* prevent the icon from shrinking when the row is narrow */
+}
+
+/* Stacks timestamp above the metadata chip row */
+.visit-details {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  flex: 1; /* take all remaining space so badge-new stays on the far right */
+}
+
+.visit-time {
+  font-size: .9rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* Row of OS / browser / country chips */
+.visit-meta {
+  display: flex;
+  flex-wrap: wrap; /* chips wrap to the next line on narrow screens */
+  gap: .4rem;
+}
+
+/* Individual chip — small pill with an icon and label */
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 99px; /* fully rounded "pill" shape */
+  padding: .15rem .55rem;
+  font-size: .78rem;
+  color: var(--muted);
+  white-space: nowrap; /* keep each chip on one line */
+}
+
+.meta-icon { font-size: .85rem; }
+
+/* "Latest" badge next to the most recent visit */
+.badge-new {
+  background: var(--success);
+  color: white;
+  font-size: .72rem;
+  font-weight: 700;
+  padding: .15rem .5rem;
+  border-radius: 99px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.no-data          { color: var(--muted); font-style: italic; }
+.loading-text     { color: var(--muted); margin: 1rem 0; }
+.auto-refresh-note { color: var(--muted); font-size: .85rem; text-align: right; }
