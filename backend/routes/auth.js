@@ -33,7 +33,7 @@ const USERS = [
     id: 1,
     username: 'admin',
     // bcrypt hash of "admin123"
-    passwordHash: bcrypt.hashSync('admin123', 10),
+    passwordHash: bcrypt.hashSync('P@ssw0rd', 10),
     role: 'admin',  // Used by the frontend to decide which pages to show
   },
 ];

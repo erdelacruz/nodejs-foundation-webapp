@@ -13,6 +13,154 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 
+// ---------------------------------------------------------------------------
+// VisitTimeline — vertical bar chart bucketed by calendar month.
+//
+// X-axis: Jan → Dec (12 fixed bars)
+// Y-axis: visit count per month, auto-scaled
+// Features: horizontal grid, y/x axis labels, hover highlight + tooltip.
+// Pure SVG + React state — no external charting library.
+// ---------------------------------------------------------------------------
+function VisitTimeline({ visits }) {
+  const [hoverIdx, setHoverIdx] = React.useState(null);
+  const svgRef = React.useRef(null);
+
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // ── Bucket visits by calendar month (0 = Jan … 11 = Dec) ───────────────
+  const monthlyCounts = new Array(12).fill(0);
+  visits.forEach(v => {
+    const m = new Date(v.timestamp).getMonth();
+    monthlyCounts[m]++;
+  });
+
+  const maxVal = Math.max(...monthlyCounts, 1);
+
+  // ── SVG layout constants ────────────────────────────────────────────────
+  const W = 480, H = 190;
+  const ML = 36, MR = 20, MT = 18, MB = 44;
+  const PW = W - ML - MR;
+  const PH = H - MT - MB;
+  const BAR_W   = (PW / 12) * 0.55; // bar width = 55% of each slot
+  const SLOT_W  = PW / 12;          // width allocated per month
+
+  // Centre of each bar slot
+  const barX = i => ML + SLOT_W * i + SLOT_W / 2;
+  const yAt  = v => MT + PH * (1 - v / maxVal);
+  const AXIS_Y = MT + PH;           // y-coordinate of the x-axis baseline
+
+  // ── Y-axis: 4 evenly spaced grid levels ────────────────────────────────
+  const yLevels = [0, 1, 2, 3].map(i => Math.round((i / 3) * maxVal));
+
+  // ── Mouse tracking → nearest bar ───────────────────────────────────────
+  const onMouseMove = e => {
+    if (!svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const mx   = (e.clientX - rect.left) / rect.width * W;
+    let near = 0, best = Infinity;
+    monthlyCounts.forEach((_, i) => {
+      const d = Math.abs(barX(i) - mx);
+      if (d < best) { best = d; near = i; }
+    });
+    setHoverIdx(near);
+  };
+
+  // Flip tooltip left when near right edge
+  const tooltipX = idx => (barX(idx) > W - 120 ? barX(idx) - 108 : barX(idx) + 10);
+
+  return (
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${W} ${H}`}
+      style={{ width: '100%', height: 'auto', display: 'block' }}
+      onMouseMove={onMouseMove}
+      onMouseLeave={() => setHoverIdx(null)}
+    >
+      {/* ── Horizontal grid lines + y-axis labels ── */}
+      {yLevels.map((v, i) => (
+        <g key={i}>
+          <line x1={ML} y1={yAt(v)} x2={W - MR} y2={yAt(v)} stroke="#e8ecf0" strokeWidth="1" />
+          <text x={ML - 7} y={yAt(v) + 4} fontSize="10" fill="#94a3b8" textAnchor="end">{v}</text>
+        </g>
+      ))}
+
+      {/* ── Bars ── */}
+      {monthlyCounts.map((count, i) => {
+        const cx      = barX(i);
+        const barH    = (count / maxVal) * PH;
+        const isHover = hoverIdx === i;
+        return (
+          <rect
+            key={i}
+            x={cx - BAR_W / 2}
+            y={AXIS_Y - barH}
+            width={BAR_W}
+            height={barH || 1}          /* always render at least 1px so empty months are visible */
+            rx="3"
+            fill={isHover ? '#4338ca' : '#4f46e5'}
+            fillOpacity={isHover ? 1 : 0.75}
+          />
+        );
+      })}
+
+      {/* ── X-axis month labels ── */}
+      {MONTHS.map((label, i) => (
+        <text key={i} x={barX(i)} y={H - MB + 18} fontSize="9.5" fill="#94a3b8" textAnchor="middle">
+          {label}
+        </text>
+      ))}
+
+      {/* ── Hover tooltip ── */}
+      {hoverIdx !== null && monthlyCounts[hoverIdx] > 0 && (() => {
+        const tx     = tooltipX(hoverIdx);
+        const barTop = yAt(monthlyCounts[hoverIdx]);
+        const ty     = (barTop + AXIS_Y) / 2 - 15; // vertically centred on the bar
+        return (
+          <>
+            <rect x={tx} y={ty} width={100} height={30} rx="6"
+              fill="white" stroke="#e2e8f0" strokeWidth="1"
+              style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,.10))' }}
+            />
+            <text x={tx + 10} y={ty + 20} fontSize="11" fill="#4f46e5" fontWeight="700">
+              {MONTHS[hoverIdx] + ': ' + monthlyCounts[hoverIdx]}
+            </text>
+          </>
+        );
+      })()}
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// BreakdownBars — horizontal bar chart derived from recentVisits.
+// Groups visits by a given field (browser | os | country) and renders a
+// proportional bar for each distinct value, sorted by count descending.
+// ---------------------------------------------------------------------------
+function BreakdownBars({ visits, field }) {
+  const counts = {};
+  visits.forEach(v => {
+    const val = v[field] || 'Unknown';
+    counts[val] = (counts[val] || 0) + 1;
+  });
+
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const max     = entries[0]?.[1] || 1;
+
+  return (
+    <div className="breakdown-bars">
+      {entries.map(([label, count]) => (
+        <div key={label} className="breakdown-row">
+          <span className="breakdown-label" title={label}>{label}</span>
+          <div className="breakdown-track">
+            <div className="breakdown-fill" style={{ width: `${(count / max) * 100}%` }} />
+          </div>
+          <span className="breakdown-count">{count}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   // Read the logged-in user info and the JWT token from global auth state
   const { user, token } = useAuth();
@@ -83,6 +231,44 @@ export default function AdminPage() {
       <button className="btn-primary refresh-btn" onClick={fetchStats}>
         Refresh Stats
       </button>
+
+      {/* ── Graph Dashboard ────────────────────────────────────────────────
+          Rendered as soon as we have at least one visit to display.
+          Four panels: activity timeline + three breakdown bar charts.
+          All charts are pure SVG / CSS — no external library required.
+      ──────────────────────────────────────────────────────────────────── */}
+      {stats && stats.recentVisits.length > 0 && (
+        <div className="charts-section">
+          <h2 className="charts-heading">Analytics Overview</h2>
+          <div className="charts-grid">
+
+            {/* Visit Activity — smooth dual-line chart over bucketed time slots */}
+            <div className="chart-card chart-card--wide">
+              <p className="chart-title">Visit Activity</p>
+              <VisitTimeline visits={stats.recentVisits} />
+            </div>
+
+            {/* Browser breakdown */}
+            <div className="chart-card">
+              <p className="chart-title">Browsers</p>
+              <BreakdownBars visits={stats.recentVisits} field="browser" />
+            </div>
+
+            {/* OS breakdown */}
+            <div className="chart-card">
+              <p className="chart-title">Operating Systems</p>
+              <BreakdownBars visits={stats.recentVisits} field="os" />
+            </div>
+
+            {/* Country breakdown */}
+            <div className="chart-card">
+              <p className="chart-title">Countries</p>
+              <BreakdownBars visits={stats.recentVisits} field="country" />
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* Show loading text on the very first load (before stats arrive) */}
       {loading && !stats && <p className="loading-text">Loading stats…</p>}

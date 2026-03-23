@@ -71,9 +71,6 @@ export default function LoginPage() {
     <div className="page login-page">
       <div className="login-box">
         <h1>Admin Login</h1>
-        <p className="login-hint">
-          Use credentials: <strong>admin</strong> / <strong>admin123</strong>
-        </p>
 
         {/* Show the error banner only when there is an error message */}
         {error && <p className="error-banner">{error}</p>}

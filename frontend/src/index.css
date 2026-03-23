@@ -311,3 +311,98 @@ body {
 .no-data          { color: var(--muted); font-style: italic; }
 .loading-text     { color: var(--muted); margin: 1rem 0; }
 .auto-refresh-note { color: var(--muted); font-size: .85rem; text-align: right; }
+
+/* ── Charts / Graph Dashboard ────────────────────────────────────────────── */
+.charts-section { margin-bottom: 2rem; }
+
+.charts-heading {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 1rem;
+}
+
+/* 2-column grid; the wide card spans both columns */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .charts-grid { grid-template-columns: 1fr; }
+  .chart-card--wide { grid-column: span 1; }
+}
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem 1rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+
+/* SVG inside the timeline card shows crosshair cursor on hover */
+.chart-card svg { cursor: crosshair; }
+
+/* Activity timeline card spans full width */
+.chart-card--wide { grid-column: span 2; }
+
+.chart-title {
+  font-size: .8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+  margin-bottom: .75rem;
+}
+
+.chart-hint {
+  font-size: .75rem;
+  color: var(--muted);
+  margin-top: .5rem;
+  text-align: center;
+}
+
+/* Horizontal breakdown bars (browser / OS / country) */
+.breakdown-bars {
+  display: flex;
+  flex-direction: column;
+  gap: .55rem;
+}
+
+.breakdown-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 24px; /* label | bar | count */
+  align-items: center;
+  gap: .5rem;
+  font-size: .82rem;
+}
+
+.breakdown-label {
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.breakdown-track {
+  background: var(--bg);
+  border-radius: 99px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.breakdown-fill {
+  background: var(--primary);
+  height: 100%;
+  border-radius: 99px;
+  transition: width .4s ease;
+  min-width: 4px; /* always show at least a sliver */
+}
+
+.breakdown-count {
+  color: var(--muted);
+  font-size: .78rem;
+  text-align: right;
+}
