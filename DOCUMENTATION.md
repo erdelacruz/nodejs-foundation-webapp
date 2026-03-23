@@ -61,8 +61,9 @@ It is intentionally simple — no database, no complex state management library 
 | `jsonwebtoken` | ^9.0 | Sign and verify JSON Web Tokens (JWTs) |
 | `bcryptjs` | ^2.4 | Hash and compare passwords securely |
 | `ua-parser-js` | ^1.0 | Parse the `User-Agent` header into OS and browser details |
-| `uuid` | ^9.0 | Generate unique IDs (available, not currently used directly) |
+| `uuid` | ^9.0 | Available in dependencies (not currently used — fingerprinting uses Node's built-in `crypto`) |
 | `nodemon` | ^3.0 | Dev tool: auto-restarts the server when files change |
+| `crypto` | built-in | Node.js built-in module — used to SHA-256 hash the visitor fingerprint |
 
 > **Module system:** The backend uses **ES Modules** (`"type": "module"` in `backend/package.json`).
 > All files use `import`/`export` syntax. Local imports **must** include the `.js` extension
@@ -90,6 +91,8 @@ It is intentionally simple — no database, no complex state management library 
 nodejs-foundation-webapp/
 │
 ├── package.json                  ← Root scripts to install/run both apps
+├── .gitignore                    ← Excludes node_modules from version control
+├── vercel.json                   ← Vercel deployment config (frontend static + backend serverless)
 │
 ├── backend/
 │   ├── package.json              ← Backend dependencies
@@ -232,21 +235,26 @@ User opens "/"
      ▼
 PublicPage mounts
      │
-     ├── getOrCreateVisitorId()
-     │       ├── Check localStorage for "visitorId"
-     │       └── If missing: crypto.randomUUID() → save to localStorage
-     │
-     └── fetch POST /api/stats/visit  { visitorId }
+     └── fetch POST /api/stats/visit  {}   ← body ignored server-side
               │
               ▼
          stats.js router
               ├── totalVisits++
-              ├── uniqueVisitors.add(visitorId)    ← Set ignores duplicates
-              ├── UAParser(user-agent) → { os, browser }
-              ├── getClientIp(req)     → IP address
-              ├── getCountry(ip)       → "Philippines" | "Local" | "Unknown"
+              ├── UAParser(user-agent)  → { os, browser }
+              ├── getClientIp(req)      → IP address
+              ├── getCountry(ip)        → "Philippines" | "Local" | "Unknown"
+              │
+              ├── buildFingerprint({ browser, ip, os, lang, ua })
+              │       ├── Reads Accept-Language header (lang)
+              │       ├── Joins: "browser|ip|os|lang|ua"
+              │       └── SHA-256 hash → fixed-length hex key
+              │
+              ├── uniqueVisitors.add(fingerprint)  ← Set ignores duplicates
               └── recentVisits.unshift({ timestamp, os, browser, country })
 ```
+
+**Why server-side fingerprinting?**
+The previous approach relied on a UUID generated in the browser and stored in `localStorage`. This could be spoofed, cleared, or omitted by the client. The new approach derives uniqueness entirely from server-readable signals — no client co-operation needed.
 
 ### 6.2 — Admin Login Flow
 
@@ -431,8 +439,8 @@ Passwords are **never** stored as plain text. `bcrypt.hashSync` applies a one-wa
 **In-memory data store:**
 
 ```js
-let totalVisits    = 0;         // Increments on every POST /visit
-const uniqueVisitors = new Set(); // Stores visitor UUIDs — duplicates ignored automatically
+let totalVisits      = 0;         // Increments on every POST /visit
+const uniqueVisitors = new Set(); // Stores SHA-256 fingerprint hashes — duplicates ignored automatically
 const recentVisits   = [];        // Array of visit objects, capped at 10 entries
 ```
 
@@ -455,11 +463,25 @@ Calls `http://ip-api.com/json/{ip}?fields=status,country` to resolve a country n
 - Returns `"Unknown"` if the API call fails or the IP is a private range
 - Uses `async/await` because the HTTP request is asynchronous (non-blocking)
 
+#### `buildFingerprint({ browser, ip, os, lang, ua })`
+Builds a stable, anonymous visitor key entirely from server-readable signals:
+
+| Signal | Source | Example |
+|---|---|---|
+| `browser` | UA-Parser (name + major version) | `"Chrome 120"` |
+| `ip` | `getClientIp(req)` | `"203.0.113.5"` |
+| `os` | UA-Parser (name + version) | `"Windows 10"` |
+| `lang` | `Accept-Language` header | `"en-US,en;q=0.9"` |
+| `ua` | Raw `User-Agent` header | `"Mozilla/5.0 ..."` |
+
+The five values are joined with `|` and passed through `crypto.createHash('sha256')` to produce a fixed-length hex string. Using a hash means the stored key contains no raw PII and is always the same length regardless of input size.
+
 **Imports at the top of the file:**
 
 ```js
 import express  from 'express';                        // default import
 import UAParser from 'ua-parser-js';                   // default import
+import crypto   from 'crypto';                         // Node built-in — SHA-256 hashing
 import { verifyToken } from '../middleware/auth.js';   // named import (only what's needed)
 ```
 
@@ -469,15 +491,17 @@ Named imports let you import only specific exports, keeping each file's dependen
 
 | Line(s) | Code | Why it matters |
 |---|---|---|
-| 32 | `const uniqueVisitors = new Set()` | A `Set` is a collection where every value is unique. `set.add(x)` silently ignores `x` if it already exists — perfect for tracking distinct visitors without any extra logic. |
-| 77 | `fetch(\`http://ip-api.com/json/${ip}?fields=status,country\`)` | `fetch` is available globally in Node 18+ — no import required. The `fields` query parameter asks the API to return only `status` and `country`, reducing network payload. |
-| 101 | `router.post('/visit', async (req, res) => {` | The handler is marked `async` because it `await`s `getCountry()` which is itself an async network call. |
-| 116 | `const parser = new UAParser(ua)` | Instantiates the User-Agent parser with the raw UA string. All the parsing logic is inside the library. |
-| 121–124 | `filter(Boolean).join(' ')` | `filter(Boolean)` removes `undefined` or `null` values from the array (e.g., when version is missing). `join(' ')` concatenates with a space: `['Windows', '10'] → 'Windows 10'`. |
-| 124 | `browserInfo.major` | Returns only the major version number (e.g., `"120"` instead of `"120.0.0.0"`) for a cleaner display. |
-| 138 | `recentVisits.unshift(visitRecord)` | `unshift` adds to the **front** of the array, keeping index `0` as the most recent visit. The opposite, `push`, adds to the end. |
-| 139 | `if (recentVisits.length > 10) recentVisits.pop()` | `pop` removes the last (oldest) element. This caps the array at 10 entries without using `slice`. |
-| 150 | `export default router` | Default export — replaces `module.exports = router`. Consumers import with `import statsRoutes from './routes/stats.js'`. |
+| 35 | `const uniqueVisitors = new Set()` | A `Set` is a collection where every value is unique. `set.add(x)` silently ignores `x` if it already exists — perfect for tracking distinct visitors without any extra logic. |
+| 80 | `fetch(\`http://ip-api.com/json/${ip}?fields=status,country\`)` | `fetch` is available globally in Node 18+ — no import required. The `fields` query parameter asks the API to return only `status` and `country`, reducing network payload. |
+| 98–102 | `buildFingerprint(...)` | Joins all five signals into one string and SHA-256 hashes it. Two requests are considered the same visitor only when **all five signals match simultaneously**. |
+| 104 | `uniqueVisitors.add(fingerprint)` | The Set's deduplication handles uniqueness — no `if` needed. If the same fingerprint arrives again, the Set size stays the same. |
+| 107 | `router.post('/visit', async (req, res) => {` | The handler is marked `async` because it `await`s `getCountry()` which is itself an async network call. |
+| 122 | `const parser = new UAParser(ua)` | Instantiates the User-Agent parser with the raw UA string. All the parsing logic is inside the library. |
+| 127–130 | `filter(Boolean).join(' ')` | `filter(Boolean)` removes `undefined` or `null` values from the array (e.g., when version is missing). `join(' ')` concatenates with a space: `['Windows', '10'] → 'Windows 10'`. |
+| 130 | `browserInfo.major` | Returns only the major version number (e.g., `"120"` instead of `"120.0.0.0"`) for a cleaner display. |
+| 144 | `recentVisits.unshift(visitRecord)` | `unshift` adds to the **front** of the array, keeping index `0` as the most recent visit. The opposite, `push`, adds to the end. |
+| 145 | `if (recentVisits.length > 10) recentVisits.pop()` | `pop` removes the last (oldest) element. This caps the array at 10 entries without using `slice`. |
+| 163 | `export default router` | Default export — replaces `module.exports = router`. Consumers import with `import statsRoutes from './routes/stats.js'`. |
 
 ---
 
@@ -654,23 +678,6 @@ Without `replace`, visiting `/admin` while logged out would push `/login` onto t
 
 **Role:** The public landing page. Silently records every visit.
 
-**Visitor ID strategy:**
-
-```jsx
-function getOrCreateVisitorId() {
-  let id = localStorage.getItem('visitorId');
-  if (!id) {
-    id = crypto.randomUUID();           // Generate a random v4 UUID
-    localStorage.setItem('visitorId', id);  // Persist for future visits
-  }
-  return id;
-}
-```
-
-`localStorage` persists indefinitely (until the user clears browser data). This means the same UUID is sent on every visit from the same browser, allowing the backend to distinguish unique visitors from returning ones.
-
-`crypto.randomUUID()` is a built-in browser API — no library needed. It generates a cryptographically random 128-bit UUID like `"550e8400-e29b-41d4-a716-446655440000"`.
-
 **Fire-and-forget visit recording:**
 
 ```jsx
@@ -684,6 +691,8 @@ useEffect(() => {
 The visit is recorded silently in the background. The `catch` block suppresses errors so that a backend outage never breaks the page for visitors.
 
 `useEffect` with `[]` (empty dependency array) runs exactly once — after the component first renders (mounts). This is the equivalent of "on page load."
+
+> **Note:** The frontend code still calls `getOrCreateVisitorId()` and sends `visitorId` in the request body. The backend now **ignores** this field — unique visitor detection is handled server-side via a SHA-256 fingerprint (see [routes/stats.js](#74-routesstatsjs)). The `getOrCreateVisitorId` function in the frontend is now a no-op from the backend's perspective.
 
 ---
 
@@ -858,17 +867,14 @@ Authorization: Bearer <token>
 
 Records a public page visit. No authentication required.
 
-**Request body:**
-```json
-{ "visitorId": "550e8400-e29b-41d4-a716-446655440000" }
-```
+**Request body:** none required (any body fields are ignored)
 
 **Success response (200):**
 ```json
 { "message": "Visit recorded" }
 ```
 
-**Side effects:** increments `totalVisits`, adds `visitorId` to `uniqueVisitors` Set, calls ip-api.com for geolocation, pushes a visit record to `recentVisits`.
+**Side effects:** increments `totalVisits`; builds a server-side fingerprint from `User-Agent`, IP address, `Accept-Language`, parsed browser, and parsed OS — hashed with SHA-256 and added to the `uniqueVisitors` Set; calls ip-api.com for geolocation; pushes a visit record to `recentVisits`.
 
 ---
 
